@@ -1,15 +1,17 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { z } from "zod";
+import { chatRooms } from "./chatRooms";
 
 const ipMiddleware = new Elysia()
   .derive(
     { as: 'global' }, ({ server, request }) => console.log(server?.requestIP(request))
-  )
+  );
+
 
 const app = new Elysia()
   .use(cors())
-  .use(ipMiddleware)
+  .use(chatRooms)
   .get("/", () => "Hello Elysia backend")
   .get('/id/:id', ({ params: { id }, query: { name } }) => {
     return {
@@ -27,7 +29,7 @@ const app = new Elysia()
   .listen(3001);
 
 console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+  `Elysia is running at ${app.server?.hostname}:${app.server?.port}`
 );
 
 export type App = typeof app
