@@ -1,0 +1,8 @@
+{
+  "name": "belote",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "bun run --filter '*' dev"
+  }
+}
