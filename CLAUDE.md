@@ -4,7 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Belote is a monorepo with a Bun-based full-stack application: React 19 frontend and Elysia backend.
+Belote is an online multiplayer Belote card game (French trick-taking game for 4 players in 2 teams). Monorepo with a Bun-based full-stack application: React 19 frontend and Elysia backend.
+
+### Game Domain
+Belote is played with a 32-card deck (7-A in 4 suits). 4 players sit at cardinal positions (top/right/bottom/left), forming 2 teams (top+bottom vs right+left). A game consists of rounds with phases: dealing, bidding (auction for trump suit and contract value), playing tricks, and scoring. Variants supported: classique, coinche, contrée.
+
+### Current State
+- **Implemented:** Room creation/joining, WebSocket-based player management, real-time chat, simple client-side routing (hash-based, no router library)
+- **Defined but not implemented:** Full game type system in `apps/server/src/model/game.ts` (Card, Player, Bid, Trick, Round, GameScore, Declaration, InstanceState, PlayerView, action log types)
+- **Not yet built:** Card dealing, bidding logic, trick resolution, scoring, game UI (card display, hand visualization), persistence (all data is in-memory Maps), authentication
+
+### Communication
+- **WebSocket:** `ws://localhost:3001/ws/:roomId` — room state, player join/leave, chat messages
+- **REST:** Elysia endpoints with Eden treaty client for type-safe API calls
+- **Types shared** between client and server via Eden (client imports server types directly)
 
 ## Commands
 

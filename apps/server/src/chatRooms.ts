@@ -1,18 +1,19 @@
 import Elysia from "elysia";
+import type { InstanceState } from '@belote/shared'
 
 // temporary room storage
 // use db or redis then ?
-const rooms = new Map<string, Set<string>>()
+const rooms = new Map<string, InstanceState>()
 
 export const chatRooms = new Elysia()
     .ws('/ws/:roomId', {
-        open(ws) {
-            const roomId = ws.data.params.roomId
-            const playerId = crypto.randomUUID().slice(0, 8)
+        open(socket) {
+            const roomId = socket.data.params.roomId
+            const playerId = crypto.randomUUID().slice(0, 8);
 
-            ws.data.playerId = playerId
-            ws.data.roomId = roomId
-            ws.subscribe(roomId)
+            (socket as any).data.playerId = playerId;
+            (socket as any).data.roomId = roomId;
+            socket.subscribe(roomId)
 
             if (!rooms.has(roomId)) {
                 rooms.set(roomId, new Set())
@@ -21,13 +22,13 @@ export const chatRooms = new Elysia()
 
             const players = [...rooms.get(roomId)!]
 
-            ws.publish(roomId, JSON.stringify({
+            socket.publish(roomId, JSON.stringify({
                 type: 'player_joined',
                 playerId,
                 players
             }))
 
-            ws.send(JSON.stringify({
+            socket.send(JSON.stringify({
                 type: 'room_state',
                 playerId,
                 roomId,
@@ -37,8 +38,8 @@ export const chatRooms = new Elysia()
             console.log(`Player ${playerId} joined room ${roomId}`)
         },
 
-        message(ws, message: { type: string; text?: string }) {
-            const { roomId, playerId } = ws.data
+        message(socket, message: { type: string; text?: string }) {
+            const { roomId, playerId } = (socket as any).data
 
             if (message.type === 'chat' && message.text) {
                 const chatMessage = JSON.stringify({
@@ -47,13 +48,13 @@ export const chatRooms = new Elysia()
                     text: message.text
                 })
 
-                ws.send(chatMessage)
-                ws.publish(roomId, chatMessage)
+                socket.send(chatMessage)
+                socket.publish(roomId, chatMessage)
             }
         },
 
-        close(ws) {
-            const { roomId, playerId } = ws.data
+        close(socket) {
+            const { roomId, playerId } = (socket as any).data
 
             if (roomId && rooms.has(roomId)) {
                 rooms.get(roomId)!.delete(playerId)
@@ -63,7 +64,7 @@ export const chatRooms = new Elysia()
                 if (players.length === 0) {
                     rooms.delete(roomId)
                 } else {
-                    ws.publish(roomId, JSON.stringify({
+                    socket.publish(roomId, JSON.stringify({
                         type: 'player_left',
                         playerId,
                         players

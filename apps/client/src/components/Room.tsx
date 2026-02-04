@@ -39,7 +39,6 @@ export function Room({ roomId }: RoomProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Liste des joueurs */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Joueurs ({players.length})</CardTitle>
@@ -91,6 +90,9 @@ export function Room({ roomId }: RoomProps) {
                     </CardContent>
                 </Card>
             </div>
+            <Button onClick={() => window.location.href = '/'}>
+                Start game
+            </Button>
         </div>
     )
 }

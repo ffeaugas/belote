@@ -1,7 +1,7 @@
 {
   "name": "belote",
   "private": true,
-  "workspaces": ["apps/*"],
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "bun run --filter '*' dev"
   }

@@ -72,13 +72,11 @@ function Home({ navigate }: { navigate: (path: string) => void }) {
 export function App() {
   const { path, navigate } = useSimpleRouter()
 
-  // Route: /room/:roomId
   const roomMatch = path.match(/^\/room\/(.+)$/)
-  if (roomMatch) {
+  if (roomMatch && roomMatch[1]) {
     return <Room roomId={roomMatch[1]} />
   }
 
-  // Route: / (home)
   return <Home navigate={navigate} />
 }
 
