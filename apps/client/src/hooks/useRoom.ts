@@ -1,28 +1,28 @@
+import type { ChatMessage, Player, TablePhase } from '@belote/shared'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-export interface ChatMessage {
-    from: string
-    text: string
-}
-
 interface RoomState {
+    phase: TablePhase
     playerId: string | null
     roomId: string | null
-    players: string[]
+    players: Player[]
     messages: ChatMessage[]
     isConnected: boolean
 }
 
 type ServerMessage =
-    | { type: 'room_state'; playerId: string; roomId: string; players: string[] }
-    | { type: 'player_joined'; playerId: string; players: string[] }
-    | { type: 'player_left'; playerId: string; players: string[] }
-    | { type: 'chat'; from: string; text: string }
+    | { type: 'room_state'; playerId: string; roomId: string; players: Player[] }
+    | { type: 'player_joined'; playerId: string; players: Player[] }
+    | { type: 'player_left'; playerId: string; players: Player[] }
+    | { type: 'chat'; content: ChatMessage }
+    | { type: 'phase_changed'; phase: TablePhase }
+    | { type: 'start_game' }
 
 export function useRoom(roomId: string) {
     const [state, setState] = useState<RoomState>({
         playerId: null,
         roomId: null,
+        phase: 'WAITING_FOR_PLAYERS',
         players: [],
         messages: [],
         isConnected: false
@@ -61,8 +61,12 @@ export function useRoom(roomId: string) {
                     case 'chat':
                         setState(prev => ({
                             ...prev,
-                            messages: [...prev.messages, { from: data.from, text: data.text }]
+                            messages: [...prev.messages, data.content]
                         }))
+                        break
+
+                    case 'phase_changed':
+                        setState(prev => ({ ...prev, phase: data.phase }))
                         break
                 }
             } catch (e) {
@@ -85,5 +89,17 @@ export function useRoom(roomId: string) {
         }
     }, [])
 
-    return { ...state, sendMessage }
+    const togglePlayerReady = useCallback((playerId: string) => {
+        if (ws.current?.readyState === WebSocket.OPEN) {
+            ws.current.send(JSON.stringify({ type: 'toggle_player_ready', playerId }))
+        }
+    }, [])
+
+    const startGame = useCallback(() => {
+        if (ws.current?.readyState === WebSocket.OPEN) {
+            ws.current.send(JSON.stringify({ type: 'start_game' }))
+        }
+    }, [])
+
+    return { ...state, sendMessage, togglePlayerReady, startGame }
 }

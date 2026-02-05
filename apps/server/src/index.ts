@@ -8,7 +8,6 @@ const ipMiddleware = new Elysia()
     { as: 'global' }, ({ server, request }) => console.log(server?.requestIP(request))
   );
 
-
 const app = new Elysia()
   .use(cors())
   .use(chatRooms)

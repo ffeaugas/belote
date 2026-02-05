@@ -1,9 +1,7 @@
 import Elysia from "elysia";
-import type { InstanceState } from '@belote/shared'
+import { GameInstance } from "./repository/GameInstance";
 
-// temporary room storage
-// use db or redis then ?
-const rooms = new Map<string, InstanceState>()
+const rooms = new Map<string, GameInstance>()
 
 export const chatRooms = new Elysia()
     .ws('/ws/:roomId', {
@@ -16,11 +14,13 @@ export const chatRooms = new Elysia()
             socket.subscribe(roomId)
 
             if (!rooms.has(roomId)) {
-                rooms.set(roomId, new Set())
+                rooms.set(roomId, new GameInstance(roomId, playerId))
             }
-            rooms.get(roomId)!.add(playerId)
 
-            const players = [...rooms.get(roomId)!]
+            const instance = rooms.get(roomId)!
+            instance.addPlayer(playerId)
+
+            const players = instance.getPlayers()
 
             socket.publish(roomId, JSON.stringify({
                 type: 'player_joined',
@@ -32,38 +32,83 @@ export const chatRooms = new Elysia()
                 type: 'room_state',
                 playerId,
                 roomId,
-                players
+                players,
+                phase: instance.phase,
+                config: instance.config,
             }))
 
-            console.log(`Player ${playerId} joined room ${roomId}`)
+            console.log(`Player ${playerId} joined room ${roomId} (${instance.playerCount} players)`)
         },
 
         message(socket, message: { type: string; text?: string }) {
             const { roomId, playerId } = (socket as any).data
+            const instance = rooms.get(roomId)
+            if (!instance) return
 
             if (message.type === 'chat' && message.text) {
-                const chatMessage = JSON.stringify({
+                const chatMessage = instance.addChatMessage(playerId, message.text)
+
+                console.log('chatMessage::::::::::', chatMessage)
+                const payload = JSON.stringify({
                     type: 'chat',
-                    from: playerId,
-                    text: message.text
+                    content: chatMessage
                 })
 
-                socket.send(chatMessage)
-                socket.publish(roomId, chatMessage)
+                socket.send(payload)
+                socket.publish(roomId, payload)
+            }
+
+            if (message.type === 'toggle_player_ready') {
+                instance.togglePlayerReady(playerId)
+
+                const players = instance.getPlayers()
+
+                const payload = JSON.stringify({
+                    type: 'player_joined',
+                    playerId,
+                    players
+                })
+
+                socket.publish(roomId, payload)
+                socket.send(payload)
+            }
+
+            if (message.type === 'start_game') {
+                instance.changePhase('READY_TO_START')
+
+                const payload = JSON.stringify({
+                    type: 'phase_changed',
+                    phase: instance.phase
+                })
+
+                socket.publish(roomId, payload)
+                socket.send(payload)
+
+                setTimeout(() => {
+                    instance.changePhase('BIDDING')
+
+                    const biddingPayload = JSON.stringify({
+                        type: 'phase_changed',
+                        phase: instance.phase
+                    })
+
+                    app.server!.publish(roomId, biddingPayload)
+                }, 5000)
             }
         },
 
         close(socket) {
             const { roomId, playerId } = (socket as any).data
+            const instance = rooms.get(roomId)
 
-            if (roomId && rooms.has(roomId)) {
-                rooms.get(roomId)!.delete(playerId)
+            if (roomId && instance) {
+                instance.removePlayer(playerId)
 
-                const players = [...rooms.get(roomId)!]
-
-                if (players.length === 0) {
+                if (instance.isEmpty) {
                     rooms.delete(roomId)
                 } else {
+                    const players = instance.getPlayers()
+
                     socket.publish(roomId, JSON.stringify({
                         type: 'player_left',
                         playerId,

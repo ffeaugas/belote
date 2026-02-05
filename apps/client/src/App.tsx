@@ -4,6 +4,18 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Room } from '@/components/Room'
 import './index.css'
+import type { Card as CardType } from '@belote/shared'
+
+const cards: CardType[] = [
+  {
+    rank: 'A',
+    suit: 'hearts'
+  },
+  {
+    rank: 'K',
+    suit: 'hearts'
+  },
+]
 
 function useSimpleRouter() {
   const [path, setPath] = useState(window.location.pathname)

@@ -175,48 +175,39 @@ export interface TableConfig {
 // =============================================================================
 
 export interface InstanceState {
-    // === MÉTADONNÉES ===
     id: string;
     createdAt: number;
     createdBy: string;
     config: TableConfig;
 
-    // === PHASE ACTUELLE ===
     phase: TablePhase;
 
-    // === JOUEURS ===
     players: Map<string, Player>;  // playerId -> Player
-    seats: {
-        top: string | null;   // playerId ou null si vide
-        right: string | null;
-        bottom: string | null;
-        left: string | null;
-    };
-    teams: {
-        top_bottom: [string, string] | null;  // [playerId, playerId]
-        right_left: [string, string] | null;
-    };
-
-    // === DECK ===
-    deck: Card[];  // Cartes restantes (pour la donne)
-
-    // === ENCHÈRES (si phase === 'BIDDING') ===
-    bidding: BiddingState | null;
-
-    // === MANCHE EN COURS (si phase === 'PLAYING') ===
-    currentRound: RoundState | null;
-
-    // === TOUR EN COURS ===
-    turn: TurnState | null;
-
-    // === SCORES ===
-    score: GameScore;
-
-    // === HISTORIQUE POUR REPLAY/DEBUG ===
-    actionLog: GameAction[];
-
-    // === CHAT ===
     chat: ChatMessage[];
+
+    // seats: {
+    //     top: string | null;   // playerId ou null si vide
+    //     right: string | null;
+    //     bottom: string | null;
+    //     left: string | null;
+    // };
+    // teams: {
+    //     top_bottom: [string, string] | null;  // [playerId, playerId]
+    //     right_left: [string, string] | null;
+    // };
+
+    // deck: Card[];  // Cartes restantes (pour la donne)
+
+    // bidding: BiddingState | null;
+
+    // currentRound: RoundState | null;
+
+    // turn: TurnState | null;
+
+    // score: GameScore;
+
+    // actionLog: GameAction[]; // historic for replay/debug
+
 }
 
 // =============================================================================
