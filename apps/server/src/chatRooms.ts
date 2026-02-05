@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 import { GameInstance } from "./repository/GameInstance";
+import { broadcast } from "./utils/broadcast";
 
 const rooms = new Map<string, GameInstance>()
 
@@ -48,7 +49,6 @@ export const chatRooms = new Elysia()
             if (message.type === 'chat' && message.text) {
                 const chatMessage = instance.addChatMessage(playerId, message.text)
 
-                console.log('chatMessage::::::::::', chatMessage)
                 const payload = JSON.stringify({
                     type: 'chat',
                     content: chatMessage
@@ -87,12 +87,10 @@ export const chatRooms = new Elysia()
                 setTimeout(() => {
                     instance.changePhase('BIDDING')
 
-                    const biddingPayload = JSON.stringify({
+                    broadcast(roomId, JSON.stringify({
                         type: 'phase_changed',
                         phase: instance.phase
-                    })
-
-                    app.server!.publish(roomId, biddingPayload)
+                    }))
                 }, 5000)
             }
         },

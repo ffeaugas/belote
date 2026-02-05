@@ -72,9 +72,12 @@ export class GameInstance {
         switch (phase) {
             case 'READY_TO_START': {
                 const playersReadyCount = [...this.state.players.values()].filter(p => p.isReadyToStart).length;
-                console.log('playersReadyCount::::::::::', playersReadyCount)
                 assert(playersReadyCount === 4, 'Required 4 players to be ready to start the game')
                 this.state.phase = 'READY_TO_START'
+                break
+            }
+            case 'BIDDING': {
+                this.state.phase = 'BIDDING'
                 break
             }
             default:

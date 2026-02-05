@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { z } from "zod";
 import { chatRooms } from "./chatRooms";
+import { setServer } from "./utils/broadcast";
 
 const ipMiddleware = new Elysia()
   .derive(
@@ -26,6 +27,8 @@ const app = new Elysia()
     })
   })
   .listen(3001);
+
+if (app.server) setServer(app.server);
 
 console.log(
   `Elysia is running at ${app.server?.hostname}:${app.server?.port}`
