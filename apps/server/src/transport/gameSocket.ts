@@ -22,13 +22,14 @@ export function createGameSocket(gameService: GameService) {
   return new Elysia().ws("/ws/:roomId", {
     async open(socket) {
       const roomId = socket.data.params.roomId;
-      const playerId = crypto.randomUUID().slice(0, 8);
+      const url = new URL(socket.data.request.url);
+      const playerId = url.searchParams.get("userId") ?? crypto.randomUUID();
 
       (socket.data as any).playerId = playerId;
       (socket.data as any).roomId = roomId;
       socket.subscribe(roomId);
 
-      await gameService.joinOrCreateGame(roomId, playerId, socket);
+      await gameService.joinGame(roomId, playerId, socket);
     },
 
     async message(socket, message: IncomingMessage) {
@@ -51,22 +52,6 @@ export function createGameSocket(gameService: GameService) {
           break;
         }
 
-        case "play_card": {
-          if (!message.card) return;
-          await gameService.playCard(roomId, playerId, message.card as any);
-          break;
-        }
-
-        case "bid": {
-          await gameService.placeBid(
-            roomId,
-            playerId,
-            message.value as any,
-            message.suit as any,
-          );
-          break;
-        }
-
         default:
           console.warn(`Unknown message type: ${message.type}`);
       }
@@ -77,7 +62,6 @@ export function createGameSocket(gameService: GameService) {
 
       if (roomId && playerId) {
         await gameService.leaveGame(roomId, playerId);
-        console.log(`Player ${playerId} left room ${roomId}`);
       }
     },
   });

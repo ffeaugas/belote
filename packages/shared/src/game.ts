@@ -187,14 +187,28 @@ export interface TableConfig {
 
 export interface InstanceState {
   id: string;
+  name: string;
   createdAt: number;
   createdBy: string;
   config: TableConfig;
 
   phase: TablePhase;
 
-  players: Map<string, Player>; // playerId -> Player
+  players: Player[]; // playerId -> Player
   chat: ChatMessage[];
+}
+
+// =============================================================================
+// API TYPES
+// =============================================================================
+
+export interface CreateRoomRequest {
+  name: string;
+}
+
+export interface CreateRoomResponse {
+  id: string;
+  name: string;
 }
 
 // seats: {

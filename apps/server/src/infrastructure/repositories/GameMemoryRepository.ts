@@ -20,6 +20,7 @@ const keys = {
 
 interface RoomMetadata {
   id: string;
+  name: string;
   createdAt: number;
   createdBy: string;
   phase: TablePhase;
@@ -56,11 +57,12 @@ export class GameRepository {
 
       const state: InstanceState = {
         id: metadata.id,
+        name: metadata.name,
         createdAt: metadata.createdAt,
         createdBy: metadata.createdBy,
         config: metadata.config,
         phase: metadata.phase,
-        players: new Map(players.map((p) => [p.id, p])),
+        players,
         chat,
       };
 
@@ -72,23 +74,22 @@ export class GameRepository {
   }
 
   async save(game: GameState): Promise<void> {
-    const roomId = game.id;
-    const players = game.getPlayers();
-    const json = game.toJSON() as any;
+    const state = game.toJSON();
 
     await Promise.all([
-      this.setMetadata(roomId, {
-        id: roomId,
-        createdAt: json.createdAt,
-        createdBy: json.createdBy,
-        phase: json.phase,
-        config: json.config,
+      this.setMetadata(state.id, {
+        id: state.id,
+        name: state.name,
+        createdAt: state.createdAt,
+        createdBy: state.createdBy,
+        phase: state.phase,
+        config: state.config,
       }),
-      this.setAllPlayers(roomId, players),
-      this.setAllChatMessages(roomId, json.chat),
+      this.setAllPlayers(state.id, state.players),
+      this.setAllChatMessages(state.id, state.chat),
     ]);
 
-    await this.refreshTTL(roomId);
+    await this.refreshTTL(state.id);
   }
 
   async delete(roomId: string): Promise<void> {
@@ -111,9 +112,11 @@ export class GameRepository {
   async getMetadata(roomId: string): Promise<RoomMetadata | null> {
     const data = await this.redis.hgetall(keys.metadata(roomId));
     if (!data || Object.keys(data).length === 0) return null;
+    if (!data.id || !data.name || !data.createdBy || !data.config) return null;
 
     return {
       id: data.id,
+      name: data.name,
       createdAt: Number(data.createdAt),
       createdBy: data.createdBy,
       phase: data.phase as TablePhase,
@@ -124,6 +127,7 @@ export class GameRepository {
   async setMetadata(roomId: string, metadata: RoomMetadata): Promise<void> {
     await this.redis.hset(keys.metadata(roomId), {
       id: metadata.id,
+      name: metadata.name,
       createdAt: String(metadata.createdAt),
       createdBy: metadata.createdBy,
       phase: metadata.phase,
@@ -141,58 +145,48 @@ export class GameRepository {
   }
 
   // =========================================================================
-  // Player operations (Hash: playerId → JSON)
+  // Player operations (List: JSON players array)
   // =========================================================================
 
   async getPlayer(roomId: string, playerId: string): Promise<Player | null> {
-    const data = await this.redis.hget(keys.players(roomId), playerId);
-    if (!data) return null;
-    return JSON.parse(data);
+    const players = await this.getAllPlayers(roomId);
+    return players.find((p) => p.id === playerId) ?? null;
   }
 
   async getAllPlayers(roomId: string): Promise<Player[]> {
-    const data = await this.redis.hgetall(keys.players(roomId));
+    const data = await this.redis.lrange(keys.players(roomId), 0, -1);
     if (!data) return [];
-    return Object.values(data).map((json) => JSON.parse(json as string));
-  }
-
-  async setPlayer(roomId: string, player: Player): Promise<void> {
-    await this.redis.hset(keys.players(roomId), {
-      [player.id]: JSON.stringify(player),
-    });
+    return data.map((json) => JSON.parse(json));
   }
 
   async setAllPlayers(roomId: string, players: Player[]): Promise<void> {
     const key = keys.players(roomId);
-    // Clear existing and set new
     await this.redis.del(key);
-    if (players.length > 0) {
-      const entries: Record<string, string> = {};
-      for (const player of players) {
-        entries[player.id] = JSON.stringify(player);
-      }
-      await this.redis.hset(key, entries);
+    for (const player of players) {
+      await this.redis.rpush(key, JSON.stringify(player));
     }
   }
 
+  async addPlayer(roomId: string, player: Player): Promise<void> {
+    await this.redis.rpush(keys.players(roomId), JSON.stringify(player));
+  }
+
   async removePlayer(roomId: string, playerId: string): Promise<void> {
-    await this.redis.hdel(keys.players(roomId), playerId);
+    const players = await this.getAllPlayers(roomId);
+    const filtered = players.filter((p) => p.id !== playerId);
+    await this.setAllPlayers(roomId, filtered);
   }
 
   async getPlayerCount(roomId: string): Promise<number> {
-    return await this.redis.hlen(keys.players(roomId));
+    return await this.redis.llen(keys.players(roomId));
   }
 
-  async updatePlayerField<K extends keyof Player>(
-    roomId: string,
-    playerId: string,
-    field: K,
-    value: Player[K],
-  ): Promise<void> {
-    const player = await this.getPlayer(roomId, playerId);
-    if (player) {
-      player[field] = value;
-      await this.setPlayer(roomId, player);
+  async updatePlayer(roomId: string, player: Player): Promise<void> {
+    const players = await this.getAllPlayers(roomId);
+    const index = players.findIndex((p) => p.id === player.id);
+    if (index !== -1) {
+      players[index] = player;
+      await this.setAllPlayers(roomId, players);
     }
   }
 
@@ -221,9 +215,8 @@ export class GameRepository {
   ): Promise<void> {
     const key = keys.chat(roomId);
     await this.redis.del(key);
-    if (messages.length > 0) {
-      const jsonMessages = messages.map((m) => JSON.stringify(m));
-      await this.redis.rpush(key, ...jsonMessages);
+    for (const message of messages) {
+      await this.redis.rpush(key, JSON.stringify(message));
     }
   }
 

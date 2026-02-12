@@ -6,6 +6,7 @@ import type {
   Player,
   ChatMessage,
   TablePhase,
+  CreateRoomResponse,
 } from "@belote/shared";
 import { GameState } from "../domain/GameState";
 import { GameRules } from "../domain/rules/GameRules";
@@ -32,15 +33,36 @@ export class GameService {
     private broadcaster: Broadcaster,
   ) {}
 
-  async joinOrCreateGame(
+  async createRoom(
+    name: string,
+    createdBy: string,
+  ): Promise<ServiceResult<CreateRoomResponse>> {
+    const roomId = crypto.randomUUID().slice(0, 8);
+    const game = GameState.create(roomId, name, createdBy);
+
+    await this.repository.save(game);
+
+    return {
+      success: true,
+      data: { id: roomId, name },
+    };
+  }
+
+  async joinGame(
     roomId: string,
     playerId: string,
     socket: ElysiaWS,
-  ): Promise<GameState> {
-    let game = await this.repository.findById(roomId);
+  ): Promise<ServiceResult<GameState>> {
+    const game = await this.repository.findById(roomId);
 
     if (!game) {
-      game = GameState.create(roomId, playerId);
+      socket.send(
+        JSON.stringify({
+          type: "error",
+          message: "Room not found",
+        }),
+      );
+      return { success: false, error: "Room not found" };
     }
 
     const player = game.addPlayer(playerId);
@@ -58,12 +80,13 @@ export class GameService {
       JSON.stringify({
         type: "welcome_message",
         playerId: player.id,
+        roomName: game.name,
         players: game.getPlayers(),
         chatMessages,
       }),
     );
 
-    return game;
+    return { success: true, data: game };
   }
 
   async leaveGame(roomId: string, playerId: string): Promise<ServiceResult> {
@@ -171,73 +194,5 @@ export class GameService {
     });
 
     return { success: true, data: message };
-  }
-
-  // Future methods for gameplay
-  async playCard(
-    roomId: string,
-    playerId: string,
-    card: Card,
-  ): Promise<ServiceResult> {
-    const game = await this.repository.findById(roomId);
-    if (!game) {
-      return { success: false, error: "Game not found" };
-    }
-
-    const player = game.getPlayer(playerId);
-    if (!player || !player.hand) {
-      return { success: false, error: "Player not found or has no hand" };
-    }
-
-    // Validate using domain rules
-    // TODO: Get current trick, trump, and lead suit from game state
-    const validation = GameRules.canPlayCard(
-      player.hand,
-      card,
-      [],
-      "hearts",
-      null,
-    );
-    if (!validation.valid) {
-      return { success: false, error: validation.reason };
-    }
-
-    // TODO: Apply card play to game state
-    // TODO: Check if trick is complete
-    // TODO: Check if round is complete
-    // TODO: Broadcast updates
-
-    await this.repository.save(game);
-    return { success: true };
-  }
-
-  async placeBid(
-    roomId: string,
-    playerId: string,
-    value: BidValue | "pass",
-    suit?: Suit,
-  ): Promise<ServiceResult> {
-    const game = await this.repository.findById(roomId);
-    if (!game) {
-      return { success: false, error: "Game not found" };
-    }
-
-    // TODO: Get player position, current bidder, highest bid from game state
-    const validation = GameRules.canBid(
-      game.phase,
-      "bottom",
-      "bottom",
-      value,
-      null,
-    );
-    if (!validation.valid) {
-      return { success: false, error: validation.reason };
-    }
-
-    // TODO: Apply bid to game state
-    // TODO: Broadcast bid
-
-    await this.repository.save(game);
-    return { success: true };
   }
 }

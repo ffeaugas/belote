@@ -9,14 +9,24 @@ interface RoomProps {
 }
 
 export function Room({ roomId }: RoomProps) {
-    const { playerId, players, messages, isConnected, sendMessage, togglePlayerReady, startGame, phase } = useRoom(roomId)
+    const { playerId, roomName, players, messages, isConnected, sendMessage, togglePlayerReady, startGame, phase, error } = useRoom(roomId)
+
+    if (error) {
+        return (
+            <div className="container mx-auto p-8 text-center">
+                <p className="text-red-500 mb-4">{error}</p>
+                <a href="/" className="text-blue-500 underline">Retour à l'accueil</a>
+            </div>
+        )
+    }
+
     if (!isConnected) {
         return <div className="text-center p-8">Connexion en cours...</div>
     }
 
     if (phase === 'WAITING_FOR_PLAYERS' || phase === 'READY_TO_START') {
         return (
-            <Lobby phase={phase} roomId={roomId} players={players} messages={messages} playerId={playerId ?? ''} sendMessage={sendMessage} startGame={startGame} togglePlayerReady={togglePlayerReady} />
+            <Lobby phase={phase} roomId={roomId} roomName={roomName} players={players} messages={messages} playerId={playerId ?? ''} sendMessage={sendMessage} startGame={startGame} togglePlayerReady={togglePlayerReady} />
         )
     }
     return <div className="text-center p-8">Phase not implemented yet</div>
@@ -24,6 +34,7 @@ export function Room({ roomId }: RoomProps) {
 interface LobbyProps {
     phase: TablePhase
     roomId: string
+    roomName: string | null
     players: Player[]
     messages: ChatMessage[]
     playerId: string
@@ -35,6 +46,7 @@ interface LobbyProps {
 const Lobby = ({
     phase,
     roomId,
+    roomName,
     players,
     messages,
     playerId,
@@ -45,7 +57,10 @@ const Lobby = ({
     return (
         <div className="container mx-auto p-8 max-w-4xl relative">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Room: {roomId}</h1>
+                <div>
+                    <h1 className="text-2xl font-bold">{roomName ?? "Partie"}</h1>
+                    <p className="text-sm text-gray-500">Code: {roomId}</p>
+                </div>
                 <Button variant="outline" onClick={() => window.location.href = '/'}>
                     Quitter
                 </Button>
