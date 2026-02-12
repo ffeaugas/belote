@@ -1,37 +1,34 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
-import { z } from "zod";
-import { chatRooms } from "./chatRooms";
-import { setServer } from "./utils/broadcast";
 
-const ipMiddleware = new Elysia()
-  .derive(
-    { as: 'global' }, ({ server, request }) => console.log(server?.requestIP(request))
-  );
+// Infrastructure
+import { redis } from "./redis";
+import { GameRepository } from "./infrastructure/repositories/GameMemoryRepository";
+import { broadcaster } from "./infrastructure/broadcast/Broadcaster";
+
+// Application
+import { GameService } from "./application/GameService";
+
+// Transport
+import { createGameSocket } from "./transport/gameSocket";
+
+// Wire up dependencies
+const gameRepository = new GameRepository(redis);
+const gameService = new GameService(gameRepository, broadcaster);
+const gameSocket = createGameSocket(gameService);
 
 const app = new Elysia()
   .use(cors())
-  .use(chatRooms)
+  .use(gameSocket)
   .get("/", () => "Hello Elysia backend")
-  .get('/id/:id', ({ params: { id }, query: { name } }) => {
-    return {
-      id,
-      name
-    }
-  }, {
-    params: z.object({
-      id: z.coerce.number()
-    }),
-    query: z.object({
-      name: z.string().min(1, "Name is required"),
-    })
-  })
+  .get("/health", () => ({ status: "ok", timestamp: Date.now() }))
   .listen(3001);
 
-if (app.server) setServer(app.server);
+// Set the server reference for broadcasting
+if (app.server) {
+  broadcaster.setServer(app.server);
+}
 
-console.log(
-  `Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-);
+console.log(`Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
 
-export type App = typeof app
+export type App = typeof app;
