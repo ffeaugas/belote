@@ -42,7 +42,10 @@ export class GameState {
     return new GameState(state);
   }
 
-  // Getters for read access
+  getState(): InstanceState {
+    return { ...this.state };
+  }
+
   get id() {
     return this.state.id;
   }
@@ -160,14 +163,6 @@ export class GameState {
     };
     this.state.chat.push(message);
     return message;
-  }
-
-  static fromJSON(data: InstanceState): GameState {
-    return new GameState(data);
-  }
-
-  toJSON(): InstanceState {
-    return { ...this.state };
   }
 
   private logAction(action: GameAction): void {

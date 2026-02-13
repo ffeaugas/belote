@@ -1,20 +1,8 @@
-import type {
-  Card,
-  PlayerPosition,
-  BidValue,
-  Suit,
-  Player,
-  ChatMessage,
-  TablePhase,
-  CreateRoomResponse,
-} from "@belote/shared";
+import type { Player, ChatMessage, CreateRoomResponse } from "@belote/shared";
 import { GameState } from "../domain/GameState";
-import { GameRules } from "../domain/rules/GameRules";
+import { GameRules } from "../domain/GameRules";
 import type { GameRepository } from "../infrastructure/repositories/GameMemoryRepository";
-import type {
-  Broadcaster,
-  BroadcastMessage,
-} from "../infrastructure/broadcast/Broadcaster";
+import type { Broadcaster } from "../infrastructure/broadcast/Broadcaster";
 import { ElysiaWS } from "elysia/ws";
 
 export interface ServiceResult<T = void> {
@@ -46,7 +34,6 @@ export class GameService {
     const roomId = crypto.randomUUID().slice(0, 8);
     const game = GameState.create(roomId, name, createdBy);
 
-    // Use create() which sets TTL only once at room creation
     await this.repository.create(game);
 
     return {
@@ -86,7 +73,6 @@ export class GameService {
 
       // Reconnect: update status to connected
       player = game.reconnectPlayer(playerId);
-      await this.repository.updatePlayer(roomId, player);
 
       this.broadcaster.toRoom(roomId, {
         type: "player_reconnected",
@@ -96,7 +82,6 @@ export class GameService {
     } else {
       // New player joining
       player = game.addPlayer(playerId);
-      await this.repository.addPlayer(roomId, player);
 
       this.broadcaster.toRoom(roomId, {
         type: "player_joined",
@@ -104,6 +89,8 @@ export class GameService {
         players: game.getPlayers(),
       });
     }
+
+    await this.repository.save(game);
 
     const chatMessages = game.getChatMessages();
 
@@ -132,8 +119,8 @@ export class GameService {
     }
 
     // Mark player as disconnected (don't remove yet)
-    const disconnectedPlayer = game.disconnectPlayer(playerId);
-    await this.repository.updatePlayer(roomId, disconnectedPlayer);
+    game.disconnectPlayer(playerId);
+    await this.repository.save(game);
 
     this.broadcaster.toRoom(roomId, {
       type: "player_disconnected",
@@ -168,7 +155,7 @@ export class GameService {
     if (game.isEmpty) {
       await this.repository.delete(roomId);
     } else {
-      await this.repository.removePlayer(roomId, playerId);
+      await this.repository.save(game);
       this.broadcaster.toRoom(roomId, {
         type: "player_left",
         playerId,
@@ -187,10 +174,7 @@ export class GameService {
     }
 
     const isReady = game.togglePlayerReady(playerId);
-    const player = game.getPlayer(playerId);
-    if (player) {
-      await this.repository.updatePlayer(roomId, player);
-    }
+    await this.repository.save(game);
 
     this.broadcaster.toRoom(roomId, {
       type: "player_ready_changed",
@@ -208,22 +192,19 @@ export class GameService {
       return { success: false, error: "Game not found" };
     }
 
-    // Validate using domain rules
     const validation = GameRules.canStartGame(game.getPlayers());
     if (!validation.valid) {
       return { success: false, error: validation.reason };
     }
 
-    // Transition to READY_TO_START
     game.changePhase("READY_TO_START");
-    await this.repository.updatePhase(roomId, game.phase);
+    await this.repository.save(game);
 
     this.broadcaster.toRoom(roomId, {
       type: "phase_changed",
       phase: game.phase,
     });
 
-    // Schedule transition to BIDDING
     setTimeout(async () => {
       await this.transitionToBidding(roomId);
     }, 5000);
@@ -236,7 +217,7 @@ export class GameService {
     if (!game || game.phase !== "READY_TO_START") return;
 
     game.changePhase("BIDDING");
-    await this.repository.updatePhase(roomId, game.phase);
+    await this.repository.save(game);
 
     this.broadcaster.toRoom(roomId, {
       type: "phase_changed",
@@ -255,7 +236,7 @@ export class GameService {
     }
 
     const message = game.addChatMessage(playerId, text);
-    await this.repository.addChatMessage(roomId, message);
+    await this.repository.save(game);
 
     this.broadcaster.toRoom(roomId, {
       type: "chat",

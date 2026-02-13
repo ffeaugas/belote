@@ -17,14 +17,15 @@ export class Broadcaster {
   }
 
   toRoom(roomId: string, message: BroadcastMessage): void {
+    console.log("Broadcaster: toRoom", roomId, message.type);
+
     if (!this.server) {
       console.warn("Broadcaster: Server not set, cannot broadcast");
       return;
     }
-    console.log("Broadcaster: toRoomExcept", roomId, message);
+
     this.server.publish(roomId, JSON.stringify(message));
   }
 }
 
-// Singleton instance for easy access across the application
 export const broadcaster = new Broadcaster();

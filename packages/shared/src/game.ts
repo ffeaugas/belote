@@ -191,9 +191,7 @@ export interface InstanceState {
   createdAt: number;
   createdBy: string;
   config: TableConfig;
-
   phase: TablePhase;
-
   players: Player[]; // playerId -> Player
   chat: ChatMessage[];
 }

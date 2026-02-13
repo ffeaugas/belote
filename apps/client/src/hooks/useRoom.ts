@@ -62,6 +62,8 @@ export function useRoom(roomId: string) {
       try {
         const data: ServerMessage = JSON.parse(event.data);
 
+        console.log("Socket Message reçu :", data);
+
         switch (data.type) {
           case "welcome_message":
             setState((prev) => ({
