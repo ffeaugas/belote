@@ -102,11 +102,36 @@ export class GameState {
 
   removePlayer(playerId: string): void {
     this.state.players = this.state.players.filter((p) => p.id !== playerId);
+  }
+
+  disconnectPlayer(playerId: string): Player {
+    const player = this.state.players.find((p) => p.id === playerId);
+    if (!player) {
+      throw new Error(`Player ${playerId} not found`);
+    }
+    player.status = "disconnected";
+    player.disconnectedAt = Date.now();
     this.logAction({
       type: "PLAYER_DISCONNECT",
       playerId,
       timestamp: Date.now(),
     });
+    return player;
+  }
+
+  reconnectPlayer(playerId: string): Player {
+    const player = this.state.players.find((p) => p.id === playerId);
+    if (!player) {
+      throw new Error(`Player ${playerId} not found`);
+    }
+    player.status = "connected";
+    delete player.disconnectedAt;
+    this.logAction({
+      type: "PLAYER_RECONNECT",
+      playerId,
+      timestamp: Date.now(),
+    });
+    return player;
   }
 
   togglePlayerReady(playerId: string): boolean {

@@ -23,11 +23,17 @@ export interface ServiceResult<T = void> {
   error?: string;
 }
 
+// Grace period before fully removing a disconnected player (ms)
+const DISCONNECT_GRACE_PERIOD = 3000;
+
 /**
  * Application layer: Orchestrates game operations.
  * Coordinates between domain logic, persistence, and broadcasting.
  */
 export class GameService {
+  // Track pending disconnection timers by playerId
+  private disconnectTimers = new Map<string, Timer>();
+
   constructor(
     private repository: GameRepository,
     private broadcaster: Broadcaster,
@@ -40,7 +46,8 @@ export class GameService {
     const roomId = crypto.randomUUID().slice(0, 8);
     const game = GameState.create(roomId, name, createdBy);
 
-    await this.repository.save(game);
+    // Use create() which sets TTL only once at room creation
+    await this.repository.create(game);
 
     return {
       success: true,
@@ -65,16 +72,40 @@ export class GameService {
       return { success: false, error: "Room not found" };
     }
 
-    const player = game.addPlayer(playerId);
+    // Check if this is a reconnection (player exists but was disconnected)
+    const existingPlayer = game.getPlayer(playerId);
+    let player: Player;
+
+    if (existingPlayer) {
+      // Cancel any pending removal timer
+      const timer = this.disconnectTimers.get(playerId);
+      if (timer) {
+        clearTimeout(timer);
+        this.disconnectTimers.delete(playerId);
+      }
+
+      // Reconnect: update status to connected
+      player = game.reconnectPlayer(playerId);
+      await this.repository.updatePlayer(roomId, player);
+
+      this.broadcaster.toRoom(roomId, {
+        type: "player_reconnected",
+        playerId: player.id,
+        players: game.getPlayers(),
+      });
+    } else {
+      // New player joining
+      player = game.addPlayer(playerId);
+      await this.repository.addPlayer(roomId, player);
+
+      this.broadcaster.toRoom(roomId, {
+        type: "player_joined",
+        playerId: player.id,
+        players: game.getPlayers(),
+      });
+    }
+
     const chatMessages = game.getChatMessages();
-
-    await this.repository.save(game);
-
-    this.broadcaster.toRoom(roomId, {
-      type: "player_joined",
-      playerId: player.id,
-      players: game.getPlayers(),
-    });
 
     socket.send(
       JSON.stringify({
@@ -95,20 +126,55 @@ export class GameService {
       return { success: false, error: "Game not found" };
     }
 
+    const player = game.getPlayer(playerId);
+    if (!player) {
+      return { success: false, error: "Player not found" };
+    }
+
+    // Mark player as disconnected (don't remove yet)
+    const disconnectedPlayer = game.disconnectPlayer(playerId);
+    await this.repository.updatePlayer(roomId, disconnectedPlayer);
+
+    this.broadcaster.toRoom(roomId, {
+      type: "player_disconnected",
+      playerId,
+      players: game.getPlayers(),
+    });
+
+    // Schedule actual removal after grace period
+    const timer = setTimeout(async () => {
+      this.disconnectTimers.delete(playerId);
+      await this.finalizePlayerRemoval(roomId, playerId);
+    }, DISCONNECT_GRACE_PERIOD);
+
+    this.disconnectTimers.set(playerId, timer);
+
+    return { success: true };
+  }
+
+  private async finalizePlayerRemoval(
+    roomId: string,
+    playerId: string,
+  ): Promise<void> {
+    const game = await this.repository.findById(roomId);
+    if (!game) return;
+
+    const player = game.getPlayer(playerId);
+    // Only remove if still disconnected (didn't reconnect)
+    if (!player || player.status !== "disconnected") return;
+
     game.removePlayer(playerId);
 
     if (game.isEmpty) {
       await this.repository.delete(roomId);
     } else {
-      await this.repository.save(game);
+      await this.repository.removePlayer(roomId, playerId);
       this.broadcaster.toRoom(roomId, {
         type: "player_left",
         playerId,
         players: game.getPlayers(),
       });
     }
-
-    return { success: true };
   }
 
   async toggleReady(
@@ -121,7 +187,10 @@ export class GameService {
     }
 
     const isReady = game.togglePlayerReady(playerId);
-    await this.repository.save(game);
+    const player = game.getPlayer(playerId);
+    if (player) {
+      await this.repository.updatePlayer(roomId, player);
+    }
 
     this.broadcaster.toRoom(roomId, {
       type: "player_ready_changed",
@@ -147,7 +216,7 @@ export class GameService {
 
     // Transition to READY_TO_START
     game.changePhase("READY_TO_START");
-    await this.repository.save(game);
+    await this.repository.updatePhase(roomId, game.phase);
 
     this.broadcaster.toRoom(roomId, {
       type: "phase_changed",
@@ -167,7 +236,7 @@ export class GameService {
     if (!game || game.phase !== "READY_TO_START") return;
 
     game.changePhase("BIDDING");
-    await this.repository.save(game);
+    await this.repository.updatePhase(roomId, game.phase);
 
     this.broadcaster.toRoom(roomId, {
       type: "phase_changed",
@@ -186,7 +255,7 @@ export class GameService {
     }
 
     const message = game.addChatMessage(playerId, text);
-    await this.repository.save(game);
+    await this.repository.addChatMessage(roomId, message);
 
     this.broadcaster.toRoom(roomId, {
       type: "chat",

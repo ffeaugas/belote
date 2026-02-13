@@ -73,6 +73,10 @@ export class GameRepository {
     }
   }
 
+  /**
+   * Full save - only use for initial room creation.
+   * For updates, prefer granular methods: updatePlayer(), updatePhase(), addChatMessage()
+   */
   async save(game: GameState): Promise<void> {
     const state = game.toJSON();
 
@@ -88,8 +92,14 @@ export class GameRepository {
       this.setAllPlayers(state.id, state.players),
       this.setAllChatMessages(state.id, state.chat),
     ]);
+  }
 
-    await this.refreshTTL(state.id);
+  /**
+   * Initial save with TTL - use only when creating a new room.
+   */
+  async create(game: GameState): Promise<void> {
+    await this.save(game);
+    await this.refreshTTL(game.id);
   }
 
   async delete(roomId: string): Promise<void> {
